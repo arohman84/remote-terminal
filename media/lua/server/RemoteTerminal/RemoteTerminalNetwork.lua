@@ -533,35 +533,33 @@ function RemoteTerminalNetwork.storeItemsFromPlayer(playerObj, ip, items)
 
     -- Route each item
     for _, item in ipairs(items) do
-        if not item then goto continue end
-
-        local isPerishable = false
-        if instanceof(item, "Food") then
-            local okMax, offAgeMax = pcall(function() return item:getOffAgeMax() end)
-            if okMax and offAgeMax and offAgeMax > 0 then
-                isPerishable = true
+        if item then
+            local isPerishable = false
+            if instanceof(item, "Food") then
+                local okMax, offAgeMax = pcall(function() return item:getOffAgeMax() end)
+                if okMax and offAgeMax and offAgeMax > 0 then
+                    isPerishable = true
+                end
             end
-        end
 
-        -- Prefer cold storage for perishable food
-        local targets = isPerishable and coldContainers or allContainers
-        if #targets == 0 then
-            targets = allContainers
-        end
+            -- Prefer cold storage for perishable food
+            local targets = isPerishable and coldContainers or allContainers
+            if #targets == 0 then
+                targets = allContainers
+            end
 
-        for _, container in ipairs(targets) do
-            if container:isItemAllowed(item) and container:hasRoomFor(playerObj, item) then
-                local playerInv = playerObj:getInventory()
-                if playerInv then
-                    playerInv:Remove(item)
-                    container:AddItem(item)
-                    stored = stored + 1
-                    break
+            for _, container in ipairs(targets) do
+                if container:isItemAllowed(item) and container:hasRoomFor(playerObj, item) then
+                    local playerInv = playerObj:getInventory()
+                    if playerInv then
+                        playerInv:Remove(item)
+                        container:AddItem(item)
+                        stored = stored + 1
+                        break
+                    end
                 end
             end
         end
-
-        ::continue::
     end
 
     RemoteTerminal.Network.version = (RemoteTerminal.Network.version or 0) + 1

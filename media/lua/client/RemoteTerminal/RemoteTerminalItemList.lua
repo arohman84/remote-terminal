@@ -78,26 +78,29 @@ function RemoteTerminalItemList:applyFilters()
     local results = {}
 
     for _, entry in ipairs(self.entries) do
+        local skip = false
+
         -- Search filter
         if self.searchText ~= "" then
             local name = string.lower(tostring(entry.displayName or ""))
             local cat = string.lower(tostring(entry.category or ""))
             if not string.find(name, self.searchText, 1, true)
                and not string.find(cat, self.searchText, 1, true) then
-                goto skipEntry
+                skip = true
             end
         end
 
         -- View mode filter
-        if self.viewMode == RemoteTerminalItemList.VIEW_FRIDGE and not entry.hasFridge then
-            goto skipEntry
+        if not skip and self.viewMode == RemoteTerminalItemList.VIEW_FRIDGE and not entry.hasFridge then
+            skip = true
         end
-        if self.viewMode == RemoteTerminalItemList.VIEW_FREEZER and not entry.hasFreezer then
-            goto skipEntry
+        if not skip and self.viewMode == RemoteTerminalItemList.VIEW_FREEZER and not entry.hasFreezer then
+            skip = true
         end
 
-        table.insert(results, entry)
-        ::skipEntry::
+        if not skip then
+            table.insert(results, entry)
+        end
     end
 
     -- Sort by name (or category)
