@@ -13,6 +13,7 @@ require "ISUI/ISTextEntryBox"
 require "ISUI/ISTextBox"
 require "ISUI/ISMouseDrag"
 require "ISUI/ISInventoryPane"
+require "ISUI/ISWorldObjectContextMenu"
 require "TimedActions/ISInventoryTransferAction"
 require "RemoteTerminal/RemoteTerminal"
 require "RemoteTerminal/RemoteTerminalData"
@@ -495,11 +496,14 @@ end
 -- ============================================================================
 
 local function onFillWorldObjectContextMenu(player, context, worldObjects, test)
+    -- Test mode: signal presence without building full menu
+    if test and ISWorldObjectContextMenu.Test then return true end
     if not worldObjects or #worldObjects == 0 then return end
+
     local playerObj = getSpecificPlayer(player)
     if not playerObj then return end
 
-    -- Only show for single-object right-click
+    -- Only act if a Remote Terminal is in the clicked objects
     local terminalObj = nil
     for _, obj in ipairs(worldObjects) do
         if RemoteTerminal.isTerminalObject(obj) then
@@ -507,7 +511,9 @@ local function onFillWorldObjectContextMenu(player, context, worldObjects, test)
             break
         end
     end
-    if not terminalObj then return end
+    if not terminalObj then return end  -- NOT our object — don't interfere
+
+    if test then return ISWorldObjectContextMenu.setTest() end
 
     context:addOption("Open Remote Terminal", terminalObj, function()
         RemoteTerminalTerminalUI.openTerminal(terminalObj, playerObj)

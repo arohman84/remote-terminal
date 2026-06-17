@@ -1,25 +1,30 @@
 -- RemoteTerminalBuildMenu.lua
--- Build menu integration for Remote Terminal packers and terminals.
+-- Build menu integration and world-object context menus for
+-- Remote Terminal packers and terminals.
+--
 -- Adds "Remote Terminals" sub-menu under Build with Packer + Terminal options.
--- Follows the WarehouseTerminal_Balanced build menu pattern.
+-- Also adds right-click menus for placed packers (view IP, set PIN).
+--
+-- IMPORTANT: All context menu hooks check test mode first and return
+-- early when objects don't belong to this mod, to avoid conflicts.
 
 require "BuildingObjects/ISBuildingObject"
 require "server/RemoteTerminal/RemoteTerminalObjects"
 require "RemoteTerminal/RemoteTerminal"
-require "RemoteTerminal/RemoteTerminalData"
 require "ISUI/ISContextMenu"
 require "ISUI/ISWorldObjectContextMenu"
+require "ISUI/ISTextBox"
 
 RemoteTerminalBuildMenu = RemoteTerminalBuildMenu or {}
 
 -- ============================================================================
 -- Sprites
 -- ============================================================================
-RemoteTerminalBuildMenu.PACKER_SPRITE = "appliances_com_01_52"
+RemoteTerminalBuildMenu.PACKER_SPRITE   = "appliances_com_01_52"
 RemoteTerminalBuildMenu.TERMINAL_SPRITE = "appliances_com_01_40"
 
 -- ============================================================================
--- Helpers
+-- Material Helpers
 -- ============================================================================
 local function predicateWeldingMask(item)
     return item:hasTag("WeldingMask") or item:getType() == "WeldingMask"
@@ -32,14 +37,12 @@ end
 
 local function getMaterialCount(playerObj, groundCounts, type)
     local count = playerObj:getInventory():getCountTypeRecurse(type)
-    if groundCounts[type] then
-        count = count + groundCounts[type]
-    end
+    if groundCounts[type] then count = count + groundCounts[type] end
     return count
 end
 
 -- ============================================================================
--- Tooltip Builder
+-- Requirement Tables
 -- ============================================================================
 local TERMINAL_REQUIREMENTS = {
     materials = {
@@ -48,7 +51,7 @@ local TERMINAL_REQUIREMENTS = {
         { type = "Plank",       fullType = "Base.Plank",       count = 6 },
     },
     tools = {
-        { type = "BlowTorch",   fullType = "Base.BlowTorch" },
+        { type = "BlowTorch", fullType = "Base.BlowTorch" },
         { predicate = predicateWeldingMask, fullType = "Base.WeldingMask" },
     },
     perks = {
@@ -66,7 +69,7 @@ local PACKER_REQUIREMENTS = {
         { type = "Wire",          fullType = "Base.Wire",          count = 2 },
     },
     tools = {
-        { type = "BlowTorch",   fullType = "Base.BlowTorch" },
+        { type = "BlowTorch", fullType = "Base.BlowTorch" },
         { predicate = predicateWeldingMask, fullType = "Base.WeldingMask" },
     },
     perks = {
@@ -80,48 +83,33 @@ local function addTooltip(option, playerObj, sprite, requirements)
     option.toolTip = tooltip
     tooltip:setName("Remote Terminal")
     tooltip.texture = sprite
-
     local groundCounts = getGroundCounts(playerObj)
-
-    -- Materials
     for _, mat in ipairs(requirements.materials) do
         local count = getMaterialCount(playerObj, groundCounts, mat.fullType)
-        local ok = count >= mat.count
-        local prefix = ok and " <RGB:0,1,0> " or " <RGB:1,0,0> "
+        local prefix = count >= mat.count and " <RGB:0,1,0> " or " <RGB:1,0,0> "
         tooltip.description = (tooltip.description or "") .. prefix
             .. mat.type .. " " .. count .. "/" .. mat.count .. " <LINE>"
     end
-
-    -- Tools
     for _, tool in ipairs(requirements.tools) do
-        local has = false
-        if tool.predicate then
-            has = playerObj:getInventory():containsEvalRecurse(tool.predicate)
-        else
-            has = playerObj:getInventory():containsTypeRecurse(tool.fullType)
-        end
+        local has = tool.predicate
+            and playerObj:getInventory():containsEvalRecurse(tool.predicate)
+            or playerObj:getInventory():containsTypeRecurse(tool.fullType)
         local prefix = has and " <RGB:0,1,0> " or " <RGB:1,0,0> "
         tooltip.description = (tooltip.description or "") .. prefix .. tool.type .. " <LINE>"
     end
-
-    -- Perks
     for _, perk in ipairs(requirements.perks) do
         local level = playerObj:getPerkLevel(perk.perk)
-        local ok = level >= perk.level
-        local prefix = ok and " <RGB:0,1,0> " or " <RGB:1,0,0> "
+        local prefix = level >= perk.level and " <RGB:0,1,0> " or " <RGB:1,0,0> "
         tooltip.description = (tooltip.description or "") .. prefix
             .. perk.label .. " " .. level .. "/" .. perk.level
     end
 end
 
 -- ============================================================================
--- Build Handlers (place objects in the world)
+-- Build Handlers
 -- ============================================================================
 
 function RemoteTerminalBuildMenu.onBuildTerminal(worldobjects, player)
-    local playerObj = getSpecificPlayer(player)
-    if not playerObj then return end
-
     local terminal = RemoteTerminalObject:new(
         RemoteTerminalBuildMenu.TERMINAL_SPRITE,
         RemoteTerminalBuildMenu.TERMINAL_SPRITE,
@@ -134,9 +122,6 @@ function RemoteTerminalBuildMenu.onBuildTerminal(worldobjects, player)
 end
 
 function RemoteTerminalBuildMenu.onBuildPacker(worldobjects, player)
-    local playerObj = getSpecificPlayer(player)
-    if not playerObj then return end
-
     local packer = RemotePackerObject:new(
         RemoteTerminalBuildMenu.PACKER_SPRITE,
         RemoteTerminalBuildMenu.PACKER_SPRITE,
@@ -149,29 +134,20 @@ function RemoteTerminalBuildMenu.onBuildPacker(worldobjects, player)
 end
 
 -- ============================================================================
--- Context Menu Hook: "Build" → "Remote Terminals" → Packer / Terminal
+-- Build Menu Hook: "Build" → "Remote Terminals" → Packer / Terminal
 -- ============================================================================
 
-function RemoteTerminalBuildMenu.addToBuildMenu(player, context, worldobjects, test)
-    if test and ISWorldObjectContextMenu.Test then
-        return true
-    end
-    if getCore():getGameMode() == "LastStand" then
-        return
-    end
+local function onFillBuildMenu(player, context, worldobjects, test)
+    -- Test mode: signal that we add options, but don't actually add them
+    if test and ISWorldObjectContextMenu.Test then return true end
+    if getCore():getGameMode() == "LastStand" then return end
 
     local playerObj = getSpecificPlayer(player)
-    if not playerObj or playerObj:getVehicle() then
-        return
-    end
+    if not playerObj or playerObj:getVehicle() then return end
+    if test then return ISWorldObjectContextMenu.setTest() end
 
-    if test then
-        return ISWorldObjectContextMenu.setTest()
-    end
-
-    -- Find or create the "Build" sub-menu
     local buildOption = context:getOptionFromName(getText("ContextMenu_Build"))
-    local buildSubMenu = nil
+    local buildSubMenu
     if buildOption and buildOption.subOption then
         buildSubMenu = context:getSubMenu(buildOption.subOption)
     else
@@ -180,38 +156,38 @@ function RemoteTerminalBuildMenu.addToBuildMenu(player, context, worldobjects, t
         context:addSubMenu(buildOption, buildSubMenu)
     end
 
-    -- Add "Remote Terminals" sub-menu
     local groupOption = buildSubMenu:addOption("Remote Terminals", worldobjects, nil)
     local groupSubMenu = ISContextMenu:getNew(buildSubMenu)
     buildSubMenu:addSubMenu(groupOption, groupSubMenu)
 
-    -- Terminal build option
-    local terminalOption = groupSubMenu:addOption(
+    local termOpt = groupSubMenu:addOption(
         "Remote Terminal", worldobjects,
         RemoteTerminalBuildMenu.onBuildTerminal, player
     )
-    addTooltip(terminalOption, playerObj, RemoteTerminalBuildMenu.TERMINAL_SPRITE, TERMINAL_REQUIREMENTS)
+    addTooltip(termOpt, playerObj, RemoteTerminalBuildMenu.TERMINAL_SPRITE, TERMINAL_REQUIREMENTS)
 
-    -- Packer build option
-    local packerOption = groupSubMenu:addOption(
+    local packOpt = groupSubMenu:addOption(
         "Remote Packer", worldobjects,
         RemoteTerminalBuildMenu.onBuildPacker, player
     )
-    addTooltip(packerOption, playerObj, RemoteTerminalBuildMenu.PACKER_SPRITE, PACKER_REQUIREMENTS)
+    addTooltip(packOpt, playerObj, RemoteTerminalBuildMenu.PACKER_SPRITE, PACKER_REQUIREMENTS)
 end
 
-Events.OnFillWorldObjectContextMenu.Add(RemoteTerminalBuildMenu.addToBuildMenu)
+Events.OnFillWorldObjectContextMenu.Add(onFillBuildMenu)
 
 -- ============================================================================
--- Packer Context Menu (right-click on world-placed packer)
+-- Packer Context Menu (right-click on placed packer)
 -- ============================================================================
+
 local function onPackerContextMenu(player, context, worldobjects, test)
-    if not worldobjects or #worldobjects == 0 then return end
+    -- Test mode: signal presence but don't add options
     if test and ISWorldObjectContextMenu.Test then return true end
+    if not worldobjects or #worldobjects == 0 then return end
 
     local playerObj = getSpecificPlayer(player)
     if not playerObj then return end
 
+    -- Only act if one of the clicked objects is a Remote Packer
     local packerObj = nil
     for _, obj in ipairs(worldobjects) do
         if RemoteTerminal.isPackerObject(obj) then
@@ -219,19 +195,16 @@ local function onPackerContextMenu(player, context, worldobjects, test)
             break
         end
     end
-    if not packerObj then return end
+    if not packerObj then return end  -- NOT our object — don't interfere
 
     if test then return ISWorldObjectContextMenu.setTest() end
 
-    local modData = packerObj:getModData()
-    local ip = modData and modData.RemotePackerIP or "???"
-    local pin = modData and modData.RemotePackerPIN or ""
+    local md = packerObj:getModData()
+    local ip = md.RemotePackerIP or "???"
+    local pin = md.RemotePackerPIN or ""
 
-    -- "View Packer Info"
-    local pinDisplay = pin ~= "" and " (PIN: ****)" or " (no PIN)"
-    context:addOption("Packer: " .. ip .. pinDisplay, nil, nil)
+    context:addOption("Packer: " .. ip .. (pin ~= "" and " (PIN: ****)" or " (no PIN)"), nil, nil)
 
-    -- "Set Packer PIN"
     context:addOption("Set Packer PIN", packerObj, function()
         local modal = ISTextBox:new(
             0, 0, 360, 150,
@@ -242,8 +215,8 @@ local function onPackerContextMenu(player, context, worldobjects, test)
                 local text = button.parent and button.parent.entry and button.parent.entry:getText() or ""
                 local newPIN = RemoteTerminal.normalizePIN(text, true)
                 if newPIN then
-                    modData.RemotePackerPIN = (newPIN ~= "" and newPIN or nil)
-                    packerObj:transmitModData()
+                    md.RemotePackerPIN = (newPIN ~= "" and newPIN or nil)
+                    pcall(packerObj.transmitModData, packerObj)
                 end
             end,
             playerObj:getPlayerNum()

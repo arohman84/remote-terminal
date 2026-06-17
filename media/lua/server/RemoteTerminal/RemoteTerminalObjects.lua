@@ -1,18 +1,24 @@
 -- RemoteTerminalObjects.lua
 -- Building object definitions for the Remote Terminal mod.
 -- Defines two world-placeable objects:
---   1. Remote Packer     — network hub (holds no items, just routes)
+--   1. Remote Packer     — network hub (holds no items)
 --   2. Remote Terminal   — storage access point (has container, links to packer)
 --
--- Uses base-game sprites and follows WarehouseTerminal_Balanced patterns.
+-- IMPORTANT: This file can be loaded on both client and server
+-- (required by the build menu). All server-only registration calls
+-- are guarded with isServer() checks.
 
 require "BuildingObjects/ISBuildingObject"
 require "RemoteTerminal/RemoteTerminal"
 require "server/RemoteTerminal/RemoteTerminalNetwork"
 
 -- ============================================================================
--- Helper: check for welding mask in inventory
+-- Local helpers
 -- ============================================================================
+local function isServerSide()
+    return isServer and isServer()
+end
+
 local function hasWeldingMask(inventory)
     return inventory:containsEvalRecurse(function(item)
         return item:hasTag("WeldingMask") or item:getType() == "WeldingMask"
@@ -49,8 +55,10 @@ function RemoteTerminalObject:create(x, y, z, north, sprite)
     self.javaObject:transmitCompleteItemToServer()
     self.javaObject:transmitModData()
 
-    -- Register in global network table
-    RemoteTerminalNetwork.registerTerminal(self.javaObject)
+    -- Register in global network table — SERVER ONLY
+    if isServerSide() then
+        pcall(RemoteTerminalNetwork.registerTerminal, self.javaObject)
+    end
 end
 
 function RemoteTerminalObject:getHealth()
@@ -58,13 +66,9 @@ function RemoteTerminalObject:getHealth()
 end
 
 function RemoteTerminalObject:hasRequiredToolsAndSkills()
-    if ISBuildMenu.cheat then
-        return true
-    end
+    if ISBuildMenu.cheat then return true end
     local playerObj = getSpecificPlayer(self.player)
-    if not playerObj then
-        return false
-    end
+    if not playerObj then return false end
     local inventory = playerObj:getInventory()
     return playerObj:getPerkLevel(Perks.Woodwork) >= 6
         and playerObj:getPerkLevel(Perks.MetalWelding) >= 4
@@ -73,12 +77,8 @@ function RemoteTerminalObject:hasRequiredToolsAndSkills()
 end
 
 function RemoteTerminalObject:isValid(square)
-    if buildUtil.stairIsBlockingPlacement(square, true) then
-        return false
-    end
-    if not self:hasRequiredToolsAndSkills() then
-        return false
-    end
+    if buildUtil.stairIsBlockingPlacement(square, true) then return false end
+    if not self:hasRequiredToolsAndSkills() then return false end
     return ISBuildingObject.isValid(self, square)
 end
 
@@ -91,12 +91,10 @@ function RemoteTerminalObject:new(sprite, northSprite, eastSprite, southSprite)
     setmetatable(o, self)
     self.__index = self
     o:init()
-
     o:setSprite(sprite)
     o:setNorthSprite(northSprite)
     o:setEastSprite(eastSprite)
     o:setSouthSprite(southSprite)
-
     o.name = "Remote Terminal"
     o.isContainer = true
     o.containerType = "crate"
@@ -111,14 +109,12 @@ function RemoteTerminalObject:new(sprite, northSprite, eastSprite, southSprite)
     o.actionAnim = "BlowTorchMid"
     o.craftingBank = "BlowTorch"
     o.completionSound = "BuildMetalStructureMedium"
-
     o.modData["RemoteTerminalObj"] = true
     o.modData["need:Base.SheetMetal"] = "6"
     o.modData["need:Base.MetalPipe"] = "4"
     o.modData["need:Base.Plank"] = "6"
     o.modData["xp:Woodwork"] = "5"
     o.modData["xp:MetalWelding"] = "10"
-
     return o
 end
 
@@ -148,8 +144,10 @@ function RemotePackerObject:create(x, y, z, north, sprite)
     self.javaObject:transmitCompleteItemToServer()
     self.javaObject:transmitModData()
 
-    -- Register in global network table
-    RemoteTerminalNetwork.registerPacker(self.javaObject)
+    -- Register in global network table — SERVER ONLY
+    if isServerSide() then
+        pcall(RemoteTerminalNetwork.registerPacker, self.javaObject)
+    end
 end
 
 function RemotePackerObject:getHealth()
@@ -157,13 +155,9 @@ function RemotePackerObject:getHealth()
 end
 
 function RemotePackerObject:hasRequiredToolsAndSkills()
-    if ISBuildMenu.cheat then
-        return true
-    end
+    if ISBuildMenu.cheat then return true end
     local playerObj = getSpecificPlayer(self.player)
-    if not playerObj then
-        return false
-    end
+    if not playerObj then return false end
     local inventory = playerObj:getInventory()
     return playerObj:getPerkLevel(Perks.Woodwork) >= 6
         and playerObj:getPerkLevel(Perks.MetalWelding) >= 4
@@ -172,12 +166,8 @@ function RemotePackerObject:hasRequiredToolsAndSkills()
 end
 
 function RemotePackerObject:isValid(square)
-    if buildUtil.stairIsBlockingPlacement(square, true) then
-        return false
-    end
-    if not self:hasRequiredToolsAndSkills() then
-        return false
-    end
+    if buildUtil.stairIsBlockingPlacement(square, true) then return false end
+    if not self:hasRequiredToolsAndSkills() then return false end
     return ISBuildingObject.isValid(self, square)
 end
 
@@ -190,12 +180,10 @@ function RemotePackerObject:new(sprite, northSprite, eastSprite, southSprite)
     setmetatable(o, self)
     self.__index = self
     o:init()
-
     o:setSprite(sprite)
     o:setNorthSprite(northSprite)
     o:setEastSprite(eastSprite)
     o:setSouthSprite(southSprite)
-
     o.name = "Remote Packer"
     o.isContainer = false
     o.blockAllTheSquare = true
@@ -209,7 +197,6 @@ function RemotePackerObject:new(sprite, northSprite, eastSprite, southSprite)
     o.actionAnim = "BlowTorchMid"
     o.craftingBank = "BlowTorch"
     o.completionSound = "BuildMetalStructureMedium"
-
     o.modData["RemotePacker"] = true
     o.modData["need:Base.SheetMetal"] = "6"
     o.modData["need:Base.MetalPipe"] = "4"
@@ -218,6 +205,5 @@ function RemotePackerObject:new(sprite, northSprite, eastSprite, southSprite)
     o.modData["need:Base.Wire"] = "2"
     o.modData["xp:Woodwork"] = "5"
     o.modData["xp:MetalWelding"] = "10"
-
     return o
 end
