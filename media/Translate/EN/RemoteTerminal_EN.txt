@@ -1,0 +1,8 @@
+RemoteTerminal_EN = {
+    UI_options_RT_BatteryMax = "Battery Capacity",
+    UI_options_RT_BatteryMax_tooltip = "Maximum battery charge for the Remote Terminal device.",
+    UI_options_RT_BatteryDrainPerItem = "Battery Drain Per Item",
+    UI_options_RT_BatteryDrainPerItem_tooltip = "Battery points consumed for each item transferred.",
+    UI_options_RT_RechargeTime = "Recharge Time (ms)",
+    UI_options_RT_RechargeTime_tooltip = "Time in milliseconds to fully recharge at a generator.",
+}

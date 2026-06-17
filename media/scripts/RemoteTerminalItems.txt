@@ -1,0 +1,12 @@
+module Base
+{
+    item RemoteTerminal
+    {
+        DisplayName = Remote Terminal,
+        Icon = RemoteTerminal,
+        Type = Normal,
+        Weight = 2.0,
+        WorldStaticModel = Radio,
+        AttachmentType = Walkie,
+    }
+}

@@ -1,0 +1,19 @@
+VERSION = 1,
+
+option RemoteTerminal.BatteryMax
+{
+    type = integer, default = 100, min = 10, max = 999,
+    page = RemoteTerminal, translation = BatteryMax,
+}
+
+option RemoteTerminal.BatteryDrainPerItem
+{
+    type = double, default = 2.0, min = 0.1, max = 100.0,
+    page = RemoteTerminal, translation = BatteryDrainPerItem,
+}
+
+option RemoteTerminal.RechargeTime
+{
+    type = integer, default = 6000, min = 100, max = 30000,
+    page = RemoteTerminal, translation = RechargeTime,
+}

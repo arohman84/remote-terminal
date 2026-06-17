@@ -1,0 +1,4 @@
+name=Remote Terminal
+poster=poster.png
+id=RemoteTerminal
+description=A standalone warehouse network mod. Build Packers and Terminals in the world to create a remote-accessible storage network. Craft a handheld Remote Terminal device to browse and transfer items from anywhere — even when far away. Uses a global network table so you can connect regardless of chunk loading.
